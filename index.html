@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Scalev to SPX</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+:root{--n:#12284c;--b:#2457c5;--bg:#f2f4f8;--c:#fff;--t:#1c2430;--m:#667085;--l:#d9dee7;--ok:#127a43;--wr:#b26a00;--er:#c0262d}
+*{box-sizing:border-box}body{margin:0;font:13px/1.4 system-ui,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--t)}
+header{background:var(--n);color:#fff;padding:10px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+header h1{font-size:17px;margin:0 8px 0 0}#fname{opacity:.8;flex:1;min-width:120px}
+button,select,input{font:inherit}button{border:1px solid var(--l);background:#fff;border-radius:6px;padding:5px 10px;cursor:pointer}
+button:hover{background:#eef2fa}button.p{background:var(--b);color:#fff;border-color:var(--b)}button.d{color:var(--er)}button:disabled{opacity:.4;cursor:default}
+main{padding:12px 16px}.steps{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.step{padding:5px 12px;border-radius:14px;background:#e3e8f1;color:var(--m)}.step.done{background:#d7f0e2;color:var(--ok)}.step.todo{background:#fff1d6;color:var(--wr)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:10px}
+.card{background:var(--c);border:1px solid var(--l);border-radius:8px;padding:8px 10px}.card b{display:block;font-size:19px}.card span{color:var(--m);font-size:11px}
+.bar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px}.bar input[type=search]{padding:5px 8px;border:1px solid var(--l);border-radius:6px;width:220px}
+.wrap{background:#fff;border:1px solid var(--l);border-radius:8px;overflow:auto;max-height:62vh}
+table{border-collapse:collapse;table-layout:fixed;width:max-content}th,td{border:1px solid var(--l);padding:3px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:420px}
+th{position:sticky;top:0;background:#e9eef7;z-index:2;cursor:pointer;resize:horizontal;min-width:60px;text-align:left}
+tr.f th{top:26px;cursor:default;resize:none;padding:2px}tr.f input{width:100%;border:1px solid var(--l);padding:2px 4px}
+td.ed{background:#fff8d6}td.err{outline:2px solid var(--er);outline-offset:-2px}td.warn{outline:2px solid #e0a100;outline-offset:-2px}
+tr.del td{opacity:.45;text-decoration:line-through}tr.sel td{background:#e4edff}td input.cell,td select{width:100%}
+.bd{padding:1px 8px;border-radius:10px;font-size:11px;cursor:pointer;border:0}.bd.valid{background:#d7f0e2;color:var(--ok)}.bd.warn{background:#fff1d6;color:var(--wr)}.bd.error{background:#fbdcdc;color:var(--er)}
+#modal{position:fixed;inset:0;background:#0006;display:none;align-items:center;justify-content:center;z-index:9}
+#modal .box{background:#fff;border-radius:10px;padding:16px;max-width:96vw;max-height:90vh;overflow:auto;min-width:340px;width:760px}
+#modal h3{margin-top:0}.mut{color:var(--m)}.row{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap}
+#toast{position:fixed;bottom:14px;right:14px;background:var(--n);color:#fff;padding:8px 14px;border-radius:8px;display:none;z-index:10}
+#drop{border:2px dashed var(--b);border-radius:10px;padding:26px;text-align:center;background:#fff;margin-bottom:10px;color:var(--m)}
+.mt td,.mt th{max-width:200px;position:static}
+</style></head><body>
+<header><h1>Scalev to SPX</h1><span id="fname">Belum ada file</span>
+<button class="p" id="bImp">Import CSV Scalev</button><button class="p" id="bExp">Ekspor Excel SPX</button>
+<button id="bMap">Pengaturan Mapping</button><button id="bReg">Muat Referensi Wilayah</button><button id="bRst" class="d">Reset Sesi</button>
+<input type="file" id="fCsv" accept=".csv,text/csv" hidden><input type="file" id="fReg" accept=".xlsx" hidden></header>
+<main>
+<div class="steps" id="steps"></div><div class="cards" id="cards"></div>
+<div id="drop">Tarik &amp; lepas file CSV Scalev (pemisah <b>;</b>) ke sini, atau klik Import CSV Scalev</div>
+<div class="bar">
+<input type="search" id="q" placeholder="Cari di semua kolom...">
+<select id="stat"><option value="all">Semua status</option><option value="valid">Valid</option><option value="warn">Peringatan</option><option value="error">Error</option><option value="edited">Pernah diedit</option><option value="sel">Terpilih</option></select>
+<select id="view"><option value="active">Order aktif</option><option value="del">Order terhapus</option></select>
+<button id="bRf">Reset filter</button><span class="mut" id="cnt"></span><span style="flex:1"></span>
+<button id="bUn">↶ Undo</button><button id="bRe">↷ Redo</button><button id="bBulk">Edit Massal</button>
+<button id="bDel" class="d">Hapus Terpilih</button><button id="bDelF" class="d">Hapus Hasil Filter</button><button id="bDelA" class="d">Hapus Semua</button><button id="bRes">Pulihkan Terpilih</button>
+<button id="bLog">Riwayat</button></div>
+<div class="wrap"><table id="tbl"></table></div>
+<div class="bar" style="margin-top:8px"><button id="pP">‹</button><span id="pg"></span><button id="pN">›</button>
+<select id="per"><option>25</option><option selected>50</option><option>100</option><option>250</option></select> baris/halaman
+<span class="mut">Filter kolom: teks = mengandung · <code>=x</code> sama · <code>!x</code> tidak sama · <code>^x</code> diawali · <code>x$</code> diakhiri · <code>-</code> kosong · <code>*</code> terisi · <code>&gt;n</code> <code>&lt;n</code> <code>a..b</code> angka · Shift+klik header = urut berlapis</span></div>
+</main>
+<div id="modal"><div class="box" id="mbox"></div></div><div id="toast"></div>
+<script>
+/* ================= KONSTANTA ================= */
+const SHEET='Template Pembuatan Order Massal';
+const H=['*Nomor Pesanan','*Nama Penerima // *Recipient Name','*Nomor Telepon Penerima // *Recipient Phone','*Alamat Lengkap // *Detail Address','*Provinsi // *Province','*Kota // *City','*Kecamatan // *District','*Kode Pos // *Postal Code','*Berat Paket (KG) // *Parcel Weight (KG)','*Harga Barang // *Parcel Value','*COD? (Paket COD/Bukan Paket COD) // *COD? (COD Parcel//Non-COD Parcel)','*Nominal COD yang harus ditagihkan ke Penerima // * COD Amount','*Asuransi (Y/N) / *Insurance (Y/N)','Panjang Paket (CM) // Parcel Length (CM)','Lebar Paket (CM) // Parcel Width (CM)','Tinggi Paket (CM) // Parcel Height (CM)','*Nama Barang // *Item Name','Jumlah Barang // Item Quantity','Harga Barang // Item Price','Nomer Referensi Pembeli // Customer Reference Number','*Metode Pembayaran // *Payment Method','Instruksi Pengiriman // Delivery Instruction'];
+const SH=['No. Pesanan','Nama','Telepon','Alamat','Provinsi','Kota','Kecamatan','Kode Pos','Berat (KG)','Harga Barang','COD?','Nominal COD','Asuransi','P (cm)','L (cm)','T (cm)','Nama Barang','Jml','Harga Item','Ref. Pembeli','Metode Bayar','Instruksi'];
+const NUM=[8,9,11,13,14,15,17,18], STR=[0,2,7], COD_COL=[10,11];
+const DEF_INS='Tolong Antar Sampai Tujuan, Paket ini Dalam Pengawasan Ekspedisi Pusat';
+const defCfg=()=>({codValues:'cod',weightDiv:1000,minWeight:1,cols:[
+ ...['order_id','name','phone','address','province','city','subdistrict','postal_code','weight','gross_revenue'].map(s=>({m:'src',s})),
+ {m:'auto'},{m:'auto'},{m:'fix',v:'N'},{m:'empty'},{m:'empty'},{m:'empty'},
+ {m:'src',s:'item_name'},{m:'src',s:'item_quantity'},{m:'empty'},{m:'empty'},{m:'fix',v:'Dibayar Pengirim'},{m:'fix',v:DEF_INS}]});
+/* ================= STATE ================= */
+let S={orders:[],cfg:defCfg(),log:[],fname:'',page:1,sort:[],filters:{},sel:new Set(),undo:[],redo:[],cols:[],region:null,n:0,exported:false,imported:0};
+try{const p=JSON.parse(localStorage.getItem('scalev_spx_v1')||'null');if(p){Object.assign(S,{orders:p.orders||[],cfg:p.cfg||S.cfg,log:p.log||[],fname:p.fname||'',cols:p.cols||[],n:p.n||0,imported:p.imported||0});}}catch(e){}
+const $=id=>document.getElementById(id);const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function save(){try{localStorage.setItem('scalev_spx_v1',JSON.stringify({orders:S.orders,cfg:S.cfg,log:S.log.slice(-2000),fname:S.fname,cols:S.cols,n:S.n,imported:S.imported}))}catch(e){toast('Penyimpanan browser penuh/tidak tersedia; data hanya ada di sesi ini.')}}
+function toast(t){const e=$('toast');e.textContent=t;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',3500)}
+function modal(h){$('mbox').innerHTML=h;$('modal').style.display='flex'}function ask(msg,yes,no){modal(`<h3>Konfirmasi</h3><p>${esc(msg)}</p><div class="row"><button id="aN">Batal</button><button class="p" id="aY">Ya, lanjutkan</button></div>`);$('aY').onclick=()=>{closeM();yes()};$('aN').onclick=()=>{closeM();no&&no()}}
+function closeM(){$('modal').style.display='none'}
+/* ================= MAPPING ================= */
+const isCod=raw=>S.cfg.codValues.split(',').map(x=>x.trim().toLowerCase()).includes(String(raw.payment_method||'').trim().toLowerCase());
+function mapScalevToSPX(raw,cfg=S.cfg){return H.map((_,i)=>{const m=cfg.cols[i];let v='';
+ if(m.m==='src')v=raw[m.s]??'';else if(m.m==='fix')v=m.v;else if(m.m==='auto'){const c=isCod(raw);v=i===10?(c?'Paket COD':'Bukan Paket COD'):(c?raw.gross_revenue:'')}
+ v=String(v??'').trim();
+ if(i===8&&m.m==='src'&&v!==''&&!isNaN(+v)){v=Math.max(cfg.minWeight,Math.round(+v/cfg.weightDiv*100)/100)}
+ if(NUM.includes(i)&&v!==''&&!isNaN(+v))v=+v;return v})}
+/* ================= IMPORT ================= */
+function needCols(){const s=new Set(['payment_method']);S.cfg.cols.forEach(c=>c.m==='src'&&s.add(c.s));if(S.cfg.cols.some(c=>c.m==='auto'))s.add('gross_revenue');return[...s]}
+function parseScalevCSV(f){Papa.parse(f,{header:true,delimiter:';',skipEmptyLines:'greedy',transformHeader:h=>h.replace(/^\uFEFF/,'').trim(),
+ complete:r=>previewImport(f.name,r),error:e=>modal('<h3>Gagal membaca file</h3><p>'+esc(e.message)+'</p><div class="row"><button onclick="closeM()">Tutup</button></div>')})}
+function previewImport(name,r){const f=r.meta.fields||[];if(f.length<5){return modal('<h3>Format tidak sesuai</h3><p>Header tidak ditemukan atau delimiter bukan titik koma (;).</p><div class="row"><button onclick="closeM()">Tutup</button></div>')}
+ const rows=r.data.filter(x=>Object.values(x).some(v=>String(v||'').trim()));const miss=needCols().filter(c=>!f.includes(c));
+ const used=new Set(needCols());const extra=f.filter(c=>!used.has(c));
+ const have=new Set(S.orders.map(o=>o.v[0]));const seen=new Set();const dups=[];const noId=rows.filter(x=>!String(x.order_id||'').trim()).length;
+ rows.forEach(x=>{const id=String(x.order_id||'').trim();if(!id)return;if(have.has(id)||seen.has(id))dups.push(id);seen.add(id)});
+ S._pend={name,rows};
+ modal(`<h3>Preview Import</h3><p><b>${esc(name)}</b></p><ul><li>Baris sumber: ${r.data.length} · Order terbaca: ${rows.length}</li><li>Tanpa order_id (ditandai error, tidak dihapus): ${noId}</li><li>Duplikat: ${dups.length} ${dups.length?'<span class="mut">('+esc(dups.slice(0,8).join(', '))+(dups.length>8?'…':'')+')</span>':''}</li>
+ <li style="color:${miss.length?'var(--er)':'inherit'}">Kolom dibutuhkan yang tidak ditemukan: ${miss.length?esc(miss.join(', ')):'tidak ada'}</li><li>Kolom tambahan tidak dipetakan: ${extra.length} (tetap disimpan sebagai data audit)</li></ul>
+ ${S.orders.length?`<p>Sesi aktif berisi ${S.orders.length} order. <label><input type="radio" name="im" value="add" checked> Tambahkan ke sesi</label> <label><input type="radio" name="im" value="rep"> Ganti sesi</label></p>`:''}
+ ${dups.length?'<p>Duplikat akan <b>dilewati</b>.</p>':''}
+ <div style="overflow:auto"><table class="mt"><tr>${['order_id','name','phone','postal_code','payment_method','gross_revenue'].map(c=>'<th>'+c+'</th>').join('')}</tr>${rows.slice(0,5).map(x=>'<tr>'+['order_id','name','phone','postal_code','payment_method','gross_revenue'].map(c=>'<td>'+esc(x[c])+'</td>').join('')+'</tr>').join('')}</table></div>
+ <div class="row"><button onclick="closeM()">Batalkan Import</button><button class="p" onclick="doImport()" ${rows.length?'':'disabled'}>Impor ${rows.length} order</button></div>`);S._cols=f}
+function doImport(){const mode=(document.querySelector('input[name=im]:checked')||{}).value;if(mode==='rep')return ask('Ganti seluruh sesi aktif? Perubahan sebelumnya akan hilang.',()=>{S.orders=[];S.log=[];S.sel.clear();doImport2()});doImport2()}
+function doImport2(){const {name,rows}=S._pend;
+ const have=new Set(S.orders.map(o=>o.v[0]));let add=0,skip=0;
+ rows.forEach(raw=>{const id=String(raw.order_id||'').trim();if(id&&have.has(id)){skip++;return}if(id)have.add(id);
+  S.orders.push({id:'r'+(++S.n),raw,v:mapScalevToSPX(raw),ed:{},del:false});add++});
+ S.fname=name;S.cols=S._cols;S.undo=[];S.redo=[];S.exported=false;S.imported+=add;closeM();save();render();toast(`${add} order diimpor, ${skip} duplikat dilewati`)}
+/* ================= VALIDASI ================= */
+const N=s=>String(s||'').toUpperCase().replace(/KABUPATEN|KAB\.?|KOTA ADM\.?|KOTA|[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+function validateRegion(v){const R=S.region;if(!R)return[];const o=[];const p=R.get(N(v[4]));if(!p)return[{l:'warn',c:4,m:'Provinsi tidak ada di referensi wilayah'}];
+ const c=p.get(N(v[5]));if(!c)return[{l:'warn',c:5,m:'Kota tidak ada di bawah provinsi ini pada referensi'}];
+ if(!c.d.has(N(v[6])))o.push({l:'warn',c:6,m:'Kecamatan tidak ada di bawah kota ini pada referensi'});
+ else if(v[7]!==''&&!c.d.get(N(v[6])).has(String(v[7]).replace(/\.0$/,'')))o.push({l:'warn',c:7,m:'Kode pos tidak cocok dengan referensi kecamatan (saran: '+[...c.d.get(N(v[6]))].slice(0,4).join(', ')+')'});return o}
+function validateOrder(o,idc){const v=o.v,r=[];const E=(c,m)=>r.push({l:'error',c,m}),W=(c,m)=>r.push({l:'warn',c,m});
+ [[0,'Nomor pesanan'],[1,'Nama penerima'],[2,'Nomor telepon'],[3,'Alamat lengkap'],[4,'Provinsi'],[5,'Kota'],[6,'Kecamatan'],[16,'Nama barang'],[20,'Metode pembayaran']].forEach(([c,n])=>{if(String(v[c]).trim()==='')E(c,n+' kosong')});
+ if(v[0]!==''&&idc[v[0]]>1)E(0,'Nomor pesanan duplikat di sesi');
+ const ph=String(v[2]);if(ph&&!/^\+?[0-9]+$/.test(ph))E(2,'Telepon mengandung karakter tidak valid');else if(ph&&ph.length<9)W(2,'Telepon terlalu pendek');
+ if(v[7]!==''&&!/^\d{5}$/.test(String(v[7])))W(7,'Kode pos bukan 5 digit');
+ if(typeof v[8]!=='number'||!(v[8]>0))E(8,'Berat harus angka > 0');if(typeof v[9]!=='number'||v[9]<0)E(9,'Harga barang harus angka ≥ 0');
+ if(!['Paket COD','Bukan Paket COD'].includes(v[10]))E(10,'Pilih "Paket COD" atau "Bukan Paket COD"');
+ if(v[10]==='Paket COD'){if(typeof v[11]!=='number'||v[11]<=0)E(11,'Nominal COD wajib angka > 0 untuk paket COD')}
+ else if(v[10]==='Bukan Paket COD'&&v[11]!==''&&v[11]!==0)W(11,'Nominal COD terisi padahal bukan paket COD');
+ if(!['Y','N'].includes(v[12]))E(12,'Asuransi harus Y atau N');
+ if(String(v[1]).trim().length===1)W(1,'Nama terlalu pendek');if(v[3]!==''&&String(v[3]).length<10)W(3,'Alamat terlalu pendek');
+ if(v[17]!==''&&(typeof v[17]!=='number'||!(v[17]>0)))E(17,'Jumlah barang harus bilangan positif');
+ v.forEach((x,i)=>{if(typeof x==='string'&&/^[=+\-@]/.test(x)&&![2].includes(i))W(i,'Diawali karakter rumus (= + - @); berisiko di Excel')});
+ return r.concat(validateRegion(v))}
+function status(is){return is.some(x=>x.l==='error')?'error':is.length?'warn':'valid'}
+let IC={};function analyze(){const idc={};S.orders.forEach(o=>!o.del&&(idc[o.v[0]]=(idc[o.v[0]]||0)+1));S.orders.forEach(o=>{o.is=validateOrder(o,idc);o.st=status(o.is)})}
+/* ================= FILTER/SORT ================= */
+function cellMatch(val,f){f=f.trim();if(!f)return true;const s=String(val).toLowerCase(),n=parseFloat(val);let m;
+ if(f==='-')return s==='';if(f==='*')return s!=='';if(f[0]==='=')return s===f.slice(1).toLowerCase();if(f[0]==='!')return s!==f.slice(1).toLowerCase();
+ if(f[0]==='^')return s.startsWith(f.slice(1).toLowerCase());if(f.endsWith('$'))return s.endsWith(f.slice(0,-1).toLowerCase());
+ if(m=f.match(/^(-?\d+(?:\.\d+)?)\.\.(-?\d+(?:\.\d+)?)$/))return n>=+m[1]&&n<=+m[2];
+ if(m=f.match(/^([<>]=?)\s*(-?\d+(?:\.\d+)?)$/)){const x=+m[2];return m[1]==='>'?n>x:m[1]==='<'?n<x:m[1]==='>='?n>=x:n<=x}
+ return s.includes(f.toLowerCase())}
+function applyFilters(){const q=$('q').value.toLowerCase(),st=$('stat').value,vw=$('view').value;
+ return S.orders.filter(o=>{if((vw==='del')!==o.del)return false;
+  if(st==='valid'||st==='warn'||st==='error'){if(o.st!==st)return false}else if(st==='edited'){if(!Object.keys(o.ed).length)return false}else if(st==='sel'&&!S.sel.has(o.id))return false;
+  if(q&&!o.v.join('\u0001').toLowerCase().includes(q))return false;
+  for(const c in S.filters)if(!cellMatch(o.v[c],S.filters[c]))return false;return true})}
+function applySorting(a){if(!S.sort.length)return a;return[...a].sort((x,y)=>{for(const{c,d}of S.sort){let p=x.v[c],q=y.v[c];const r=(typeof p==='number'&&typeof q==='number')?p-q:String(p).localeCompare(String(q),'id',{numeric:true});if(r)return r*d}return 0})}
+/* ================= DASHBOARD ================= */
+function calculateDashboardStats(){const a=S.orders.filter(o=>!o.del);const cod=a.filter(o=>o.v[10]==='Paket COD');
+ return{imp:S.imported||S.orders.length,act:a.length,del:S.orders.length-a.length,ok:a.filter(o=>o.st==='valid').length,warn:a.filter(o=>o.st==='warn').length,err:a.filter(o=>o.st==='error').length,sel:[...S.sel].filter(id=>a.some(o=>o.id===id)).length,codN:cod.length,non:a.length-cod.length,codSum:cod.reduce((s,o)=>s+(+o.v[11]||0),0)}}
+function renderStats(){const s=calculateDashboardStats();const fm=n=>'Rp '+n.toLocaleString('id-ID');
+ $('cards').innerHTML=[['Diimpor',s.imp],['Aktif',s.act],['Terhapus',s.del],['Valid',s.ok],['Peringatan',s.warn],['Error / bermasalah',s.err],['Terpilih',s.sel],['Order COD',s.codN],['Order non-COD',s.non],['Total nominal COD',fm(s.codSum)]].map(([a,b])=>`<div class="card"><b>${b}</b><span>${a}</span></div>`).join('');
+ const st=(c,t)=>`<div class="step ${c}">${t}</div>`;const has=s.act>0;
+ $('steps').innerHTML=st(has?'done':'todo','1 Import Scalev')+st(has?'done':'','2 Mapping Data')+st(has?(S.log.length?'done':'todo'):'','3 Edit dan Filter')+st(has?(s.err?'todo':'done'):'',`4 Validasi${has&&s.err?' ('+s.err+' error)':''}`)+st(S.exported?'done':has?'todo':'','5 Ekspor SPX');
+ $('drop').style.display=has?'none':'block';$('fname').textContent=S.fname?`${S.fname} · ${s.act} order aktif`:'Belum ada file'}
+/* ================= TABEL ================= */
+function render(){analyze();renderStats();let rows=applySorting(applyFilters());const per=+$('per').value,pages=Math.max(1,Math.ceil(rows.length/per));S.page=Math.min(S.page,pages);
+ const pr=rows.slice((S.page-1)*per,S.page*per);S.shown=rows;$('cnt').textContent=rows.length+' hasil';$('pg').textContent=`Hal ${S.page}/${pages}`;
+ const ar=c=>{const i=S.sort.findIndex(x=>x.c===c);return i<0?'':(S.sort[i].d>0?' ▲':' ▼')};
+ let h='<thead><tr><th style="width:34px"><input type="checkbox" id="all" title="Pilih semua hasil filter"></th><th style="width:44px">#</th><th style="width:90px">Status</th>'+SH.map((x,i)=>`<th data-s="${i}" style="width:${[0,3,16,20,21].includes(i)?150:i===19?110:110}px" title="${esc(H[i])}">${x}${ar(i)}</th>`).join('')+'<th style="width:70px">Aksi</th></tr>';
+ h+='<tr class="f"><th></th><th></th><th></th>'+SH.map((_,i)=>`<th><input data-f="${i}" value="${esc(S.filters[i]||'')}"></th>`).join('')+'<th></th></tr></thead><tbody>';
+ pr.forEach((o,k)=>{const bad={};o.is.forEach(x=>{if(bad[x.c]!=='error')bad[x.c]=x.l});
+  h+=`<tr data-id="${o.id}" class="${o.del?'del':''} ${S.sel.has(o.id)?'sel':''}"><td><input type="checkbox" class="ck" ${S.sel.has(o.id)?'checked':''}></td><td>${(S.page-1)*per+k+1}</td><td><button class="bd ${o.st}" data-iss="1">${{valid:'Valid',warn:'Peringatan',error:'Error'}[o.st]}</button></td>`+
+  o.v.map((x,i)=>`<td data-c="${i}" class="${o.ed[i]?'ed':''} ${bad[i]==='error'?'err':bad[i]?'warn':''}" title="${esc(x)}">${esc(x)}</td>`).join('')+`<td>${o.del?'<button data-act="res">Pulihkan</button>':'<button class="d" data-act="del">Hapus</button>'}</td></tr>`});
+ $('tbl').innerHTML=h+'</tbody>';const all=$('all');if(all)all.checked=rows.length>0&&rows.every(o=>S.sel.has(o.id));save()}
+function snap(){return S.orders.map(o=>[o.id,o.v.slice(),{...o.ed},o.del])}
+function restore(s){const m=new Map(s.map(x=>[x[0],x]));S.orders.forEach(o=>{const x=m.get(o.id);if(x){o.v=x[1];o.ed=x[2];o.del=x[3]}})}
+function pushU(){S.undo.push(snap());if(S.undo.length>60)S.undo.shift();S.redo=[]}
+function undoLastAction(){if(!S.undo.length)return toast('Tidak ada yang bisa di-undo');S.redo.push(snap());restore(S.undo.pop());render()}
+function redoLastAction(){if(!S.redo.length)return;S.undo.push(snap());restore(S.redo.pop());render()}
+function updateOrder(id,c,val){const o=S.orders.find(x=>x.id===id);let nv=val.trim();if(NUM.includes(c)&&nv!==''&&!isNaN(+nv.replace(',','.')))nv=+nv.replace(',','.');
+ if(nv===o.v[c])return render();const go=()=>{pushU();S.log.push({t:new Date().toISOString(),order:o.v[0],col:H[c],old:o.v[c],new:nv});o.v[c]=nv;o.ed[c]=true;render()};
+ if(COD_COL.includes(c))return ask(`Ubah ${SH[c]} dari "${o.v[c]}" menjadi "${nv}"? Ini memengaruhi nominal COD yang ditagihkan.`,go,render);go()}
+function edit(td){const tr=td.parentNode,id=tr.dataset.id,c=+td.dataset.c,o=S.orders.find(x=>x.id===id);if(o.del||td.querySelector('input,select'))return;
+ const opts=c===10?['Paket COD','Bukan Paket COD']:c===12?['Y','N']:null;let el;
+ if(opts){el=document.createElement('select');opts.forEach(x=>el.add(new Option(x,x,0,x===o.v[c])))}else{el=document.createElement('input');el.className='cell';el.value=o.v[c]}
+ td.textContent='';td.appendChild(el);el.focus();let done=false;
+ const fin=ok=>{if(done)return;done=true;if(ok)updateOrder(id,c,el.value);else render()};
+ el.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();fin(true)}else if(e.key==='Escape'){fin(false)}};el.onblur=()=>fin(true)}
+/* ================= HAPUS ================= */
+function delIds(ids,label){if(!ids.length)return toast('Tidak ada order');ask(`${label}: ${ids.length} order akan dihapus dari sesi (bisa dipulihkan lewat Undo / tampilan Order terhapus). Lanjutkan?`,()=>{pushU();const set=new Set(ids);S.orders.forEach(o=>set.has(o.id)&&(o.del=true));ids.forEach(i=>S.sel.delete(i));render();toast(ids.length+' order dihapus')})}
+function bulkDeleteOrders(){delIds([...S.sel].filter(i=>S.orders.find(o=>o.id===i&&!o.del)),'Hapus terpilih')}
+/* ================= EKSPOR ================= */
+function exportRows(mode,scope){let a=(scope==='filter'?S.shown:S.orders).filter(o=>!o.del);if(mode==='valid')a=a.filter(o=>o.st==='valid');else if(mode==='warn')a=a.filter(o=>o.st!=='error');return a}
+function generateSPXPreview(){const sh=S.shown||[];modal(`<h3>Preview &amp; Ekspor SPX</h3><p>
+ Mode: <select id="xm"><option value="warn">Valid + Peringatan (tanpa error)</option><option value="valid">Hanya valid</option><option value="all">Semua (termasuk error)</option></select>
+ Cakupan: <select id="xs"><option value="all">Semua order aktif</option><option value="filter">Hanya hasil filter</option></select></p><div id="xsum"></div><div style="overflow:auto;max-height:40vh"><table class="mt" id="xp"></table></div>
+ <div class="row"><button onclick="closeM()">Kembali ke tabel</button><button onclick="exportAudit()">Ekspor order bermasalah (CSV)</button><button onclick="exportLog()">Ekspor laporan perubahan</button><button class="p" id="xgo">GENERATE FILE SPX (.XLSX)</button></div>`);
+ const up=()=>{const mode=$('xm').value,a=exportRows(mode,$('xs').value),all=S.orders.filter(o=>!o.del),cod=a.filter(o=>o.v[10]==='Paket COD');
+  $('xsum').innerHTML=`<p>Akan diekspor: <b>${a.length}</b> order (COD ${cod.length}, non-COD ${a.length-cod.length}) · Total COD: <b>Rp ${cod.reduce((s,o)=>s+(+o.v[11]||0),0).toLocaleString('id-ID')}</b> · Dikecualikan: ${all.length-a.length} · Error tersisa di sesi: ${all.filter(o=>o.st==='error').length}</p>`;
+  $('xp').innerHTML='<tr>'+H.map(x=>'<th title="'+esc(x)+'">'+esc(x.split(' // ')[0])+'</th>').join('')+'</tr>'+a.slice(0,8).map(o=>'<tr>'+o.v.map(x=>'<td>'+(x===''?'<i class="mut">(kosong)</i>':esc(x))+'</td>').join('')+'</tr>').join('')};
+ $('xm').onchange=$('xs').onchange=up;up();$('xgo').onclick=()=>{const m=$('xm').value;const a=exportRows(m,$('xs').value);if(m==='all'&&a.some(o=>o.st==='error'))return ask('Ada order dengan error. Tetap ekspor?',()=>exportSPXXLSX(a));exportSPXXLSX(a)}}
+async function exportSPXXLSX(a){try{if(!a.length)return toast('Tidak ada order untuk diekspor');if(typeof ExcelJS==='undefined')throw new Error('Library ExcelJS tidak termuat (perlu internet).');
+ const wb=new ExcelJS.Workbook(),ws=wb.addWorksheet(SHEET);ws.addRow(H).font={bold:true};
+ a.forEach(o=>{const r=ws.addRow(o.v.map((x,i)=>x===''?null:x));STR.forEach(c=>{const cell=r.getCell(c+1);cell.numFmt='@';if(o.v[c]!=="")cell.value=String(o.v[c])})});
+ H.forEach((_,i)=>ws.getColumn(i+1).width=i===3||i===16||i===21?40:i===10||i===11?22:18);ws.views=[{state:'frozen',ySplit:1}];
+ for(let r=2;r<=1000;r++){ws.getCell(r,11).dataValidation={type:'list',allowBlank:true,formulae:['"Paket COD,Bukan Paket COD"']};ws.getCell(r,13).dataValidation={type:'list',allowBlank:true,formulae:['"N,Y"']};ws.getCell(r,21).dataValidation={type:'list',allowBlank:true,formulae:['"Dibayar Pengirim"']}}
+ const buf=await wb.xlsx.writeBuffer();const name=`TAP-Scalev-to-SPX-${new Date().toISOString().slice(0,10)}.xlsx`;dl(new Blob([buf]),name);S.exported=true;
+ const all=S.orders.filter(o=>!o.del);closeM();render();modal(`<h3>Ekspor selesai</h3><ul><li>File: <b>${name}</b></li><li>Order disiapkan: ${a.length}</li><li>Dikecualikan: ${all.length-a.length}</li><li>Error tersisa: ${all.filter(o=>o.st==='error').length}</li></ul><p class="mut">Aplikasi hanya membuat file. Unggah ke web SPX tetap dilakukan manual.</p><div class="row"><button class="p" onclick="closeM()">Tutup</button></div>`)}
+ catch(e){modal('<h3>Ekspor gagal</h3><p>'+esc(e.message)+'</p><div class="row"><button onclick="closeM()">Tutup</button></div>')}}
+function dl(blob,name){const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),2000)}
+const csvq=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+function exportAudit(){const rows=[['Nomor Pesanan','Status','Kolom','Masalah']];S.orders.filter(o=>!o.del&&o.is.length).forEach(o=>o.is.forEach(x=>rows.push([o.v[0],x.l,SH[x.c],x.m])));dl(new Blob(['\uFEFF'+rows.map(r=>r.map(csvq).join(';')).join('\n')],{type:'text/csv'}),'order-bermasalah.csv')}
+function exportLog(){const rows=[['Waktu','Nomor Pesanan','Kolom','Nilai Lama','Nilai Baru'],...S.log.map(l=>[l.t,l.order,l.col,l.old,l.new])];dl(new Blob(['\uFEFF'+rows.map(r=>r.map(csvq).join(';')).join('\n')],{type:'text/csv'}),'laporan-perubahan.csv')}
+/* ================= MAPPING UI ================= */
+function openMap(){const c=S.cfg,opts=['',...S.cols];modal(`<h3>Pengaturan Mapping</h3><p class="mut">Pilih sumber kolom Scalev, nilai tetap, kosong, atau otomatis (khusus COD). Header SPX tidak dapat diubah.</p>
+ <p>Nilai pembayaran COD (pisah koma): <input id="mc" value="${esc(c.codValues)}"> Pembagi berat (gram→kg): <input id="mw" size=5 value="${c.weightDiv}"> Berat minimum (kg): <input id="mm" size=4 value="${c.minWeight}"></p>
+ <table class="mt"><tr><th>Kolom SPX</th><th>Mode</th><th>Sumber Scalev</th><th>Nilai tetap</th></tr>${H.map((h,i)=>{const m=c.cols[i];return`<tr><td title="${esc(h)}">${esc(h.split(' // ')[0])}</td><td><select data-m="${i}">${[['src','Sumber'],['fix','Tetap'],['empty','Kosong'],...(i===10||i===11?[['auto','Otomatis (aturan COD)']]:[])].map(([k,t])=>`<option value="${k}" ${m.m===k?'selected':''}>${t}</option>`).join('')}</select></td><td><select data-s="${i}">${opts.map(o=>`<option ${m.s===o?'selected':''}>${esc(o)}</option>`).join('')}</select></td><td><input data-v="${i}" value="${esc(m.v||'')}"></td></tr>`}).join('')}</table>
+ <label><input type="checkbox" id="mre"> Terapkan ulang ke semua order (menimpa edit manual)</label>
+ <div class="row"><button onclick="closeM()">Batal</button><button onclick="S.cfg=defCfg();save();openMap()">Kembalikan ke Default</button><button class="p" id="msv">Simpan Mapping</button></div>`);
+ $('msv').onclick=()=>{const n={codValues:$('mc').value,weightDiv:+$('mw').value||1000,minWeight:+$('mm').value||0,cols:H.map((_,i)=>{const m=document.querySelector(`[data-m="${i}"]`).value;return{m,s:document.querySelector(`[data-s="${i}"]`).value,v:document.querySelector(`[data-v="${i}"]`).value}})};
+  const bad=n.cols.findIndex(x=>x.m==='src'&&!x.s);if(bad>=0)return toast('Sumber belum dipilih untuk: '+H[bad]);
+  const re=$('mre').checked;S.cfg=n;const fin=()=>{closeM();render();toast('Mapping disimpan')};
+  if(re)return ask('Semua order dihitung ulang dari data sumber; edit manual hilang. Lanjutkan?',()=>{pushU();S.orders.forEach(o=>{o.v=mapScalevToSPX(o.raw);o.ed={}});fin()});fin()}}
+/* ================= REFERENSI WILAYAH ================= */
+function loadRegion(f){const rd=new FileReader();rd.onload=e=>{try{const wb=XLSX.read(e.target.result,{sheets:['List Provinsi-Kota-Kecamatan'],type:'array'});const ws=wb.Sheets['List Provinsi-Kota-Kecamatan'];if(!ws)throw new Error('Sheet "List Provinsi-Kota-Kecamatan" tidak ada');
+ const R=new Map();XLSX.utils.sheet_to_json(ws,{header:1,raw:true}).slice(2).forEach(r=>{if(!r[0])return;const p=N(r[0]);if(!R.has(p))R.set(p,new Map());const P=R.get(p),ck=N(r[1]);if(!P.has(ck))P.set(ck,{d:new Map()});const d=N(r[2]);if(!P.get(ck).d.has(d))P.get(ck).d.set(d,new Set());r.slice(3).forEach(z=>z&&P.get(ck).d.get(d).add(String(Math.round(z))))});
+ S.region=R;render();toast('Referensi wilayah dimuat ('+R.size+' provinsi). Pemeriksaan bersifat peringatan.')}catch(x){toast('Gagal memuat referensi: '+x.message)}};rd.readAsArrayBuffer(f)}
+/* ================= EVENT ================= */
+$('bImp').onclick=()=>$('fCsv').click();$('fCsv').onchange=e=>{if(e.target.files[0])parseScalevCSV(e.target.files[0]);e.target.value=''};
+$('bReg').onclick=()=>$('fReg').click();$('fReg').onchange=e=>{if(e.target.files[0])loadRegion(e.target.files[0]);e.target.value=''};
+['dragover','drop'].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault();if(ev==='drop'&&e.dataTransfer.files[0])parseScalevCSV(e.dataTransfer.files[0])}));
+$('bExp').onclick=()=>S.orders.some(o=>!o.del)?generateSPXPreview():toast('Belum ada order aktif');$('bMap').onclick=openMap;
+$('bRst').onclick=()=>ask('Reset seluruh sesi? Semua order, edit, dan riwayat dihapus dari browser.',()=>{S.orders=[];S.log=[];S.sel.clear();S.undo=[];S.redo=[];S.fname='';S.imported=0;S.exported=false;render()});
+$('bUn').onclick=undoLastAction;$('bRe').onclick=redoLastAction;$('bDel').onclick=bulkDeleteOrders;
+$('bDelF').onclick=()=>delIds(S.shown.filter(o=>!o.del).map(o=>o.id),'Hapus hasil filter');$('bDelA').onclick=()=>{delIds(S.orders.filter(o=>!o.del).map(o=>o.id),'HAPUS SEMUA')};
+$('bRes').onclick=()=>{const ids=[...S.sel].filter(i=>S.orders.find(o=>o.id===i&&o.del));if(!ids.length)return toast('Pilih order di tampilan "Order terhapus"');pushU();S.orders.forEach(o=>ids.includes(o.id)&&(o.del=false));ids.forEach(i=>S.sel.delete(i));render()};
+$('bRf').onclick=()=>{S.filters={};$('q').value='';$('stat').value='all';S.page=1;render()};
+['q','stat','view','per'].forEach(i=>$(i).oninput=()=>{S.page=1;render()});$('pP').onclick=()=>{S.page=Math.max(1,S.page-1);render()};$('pN').onclick=()=>{S.page++;render()};
+$('bLog').onclick=()=>modal(`<h3>Riwayat Perubahan (${S.log.length})</h3><div style="overflow:auto;max-height:55vh"><table class="mt"><tr><th>Waktu</th><th>Order</th><th>Kolom</th><th>Lama</th><th>Baru</th></tr>${S.log.slice(-200).reverse().map(l=>`<tr><td>${l.t.slice(0,19).replace('T',' ')}</td><td>${esc(l.order)}</td><td>${esc(l.col.split(' // ')[0])}</td><td>${esc(l.old)}</td><td>${esc(l.new)}</td></tr>`).join('')}</table></div><div class="row"><button onclick="exportLog()">Ekspor CSV</button><button class="p" onclick="closeM()">Tutup</button></div>`);
+$('bBulk').onclick=()=>{const ids=[...S.sel].filter(i=>S.orders.find(o=>o.id===i&&!o.del));if(!ids.length)return toast('Pilih order dulu');
+ modal(`<h3>Edit Massal (${ids.length} order)</h3><p>Kolom: <select id="bc">${H.map((h,i)=>[0].includes(i)?'':`<option value="${i}">${esc(SH[i])}</option>`).join('')}</select> Nilai baru: <input id="bv"></p><div class="row"><button onclick="closeM()">Batal</button><button class="p" id="bgo">Terapkan</button></div>`);
+ $('bgo').onclick=()=>{const c=+$('bc').value;let v=$('bv').value.trim();if(NUM.includes(c)&&v!==''&&!isNaN(+v))v=+v;ask(`Ubah ${SH[c]} menjadi "${v}" pada ${ids.length} order?`+(COD_COL.includes(c)?' Ini memengaruhi nominal COD.':''),()=>{pushU();S.orders.forEach(o=>{if(ids.includes(o.id)&&o.v[c]!==v){S.log.push({t:new Date().toISOString(),order:o.v[0],col:H[c],old:o.v[c],new:v});o.v[c]=v;o.ed[c]=true}});closeM();render()})}};
+$('tbl').addEventListener('click',e=>{const t=e.target,tr=t.closest('tr[data-id]');
+ if(t.id==='all'){S.shown.forEach(o=>t.checked?S.sel.add(o.id):S.sel.delete(o.id));return render()}
+ if(t.closest('th[data-s]')&&!t.closest('input')){const c=+t.closest('th').dataset.s,i=S.sort.findIndex(x=>x.c===c);if(!e.shiftKey)S.sort=S.sort.filter(x=>x.c===c);if(i<0)S.sort.push({c,d:1});else if(S.sort.find(x=>x.c===c).d===1)S.sort.find(x=>x.c===c).d=-1;else S.sort=S.sort.filter(x=>x.c!==c);return render()}
+ if(!tr)return;const id=tr.dataset.id;
+ if(t.classList.contains('ck')){t.checked?S.sel.add(id):S.sel.delete(id);tr.classList.toggle('sel',t.checked);renderStats();return}
+ if(t.dataset.act==='del')return delIds([id],'Hapus order');if(t.dataset.act==='res'){pushU();S.orders.find(o=>o.id===id).del=false;return render()}
+ if(t.dataset.iss){const o=S.orders.find(x=>x.id===id);return modal(`<h3>Rincian validasi: ${esc(o.v[0])}</h3>${o.is.length?'<ul>'+o.is.map(x=>`<li><b style="color:${x.l==='error'?'var(--er)':'var(--wr)'}">${x.l==='error'?'Error':'Peringatan'}</b> · ${esc(SH[x.c])}: ${esc(x.m)}</li>`).join('')+'</ul>':'<p>Lolos semua pemeriksaan.</p>'}<p class="mut">Klik sel pada baris untuk memperbaiki.</p><div class="row"><button class="p" onclick="closeM()">Tutup</button></div>`)}
+ const td=t.closest('td[data-c]');if(td)edit(td)});
+$('tbl').addEventListener('input',e=>{const f=e.target.dataset.f;if(f===undefined)return;S.filters[f]=e.target.value;if(!e.target.value)delete S.filters[f];clearTimeout(S.ft);S.ft=setTimeout(()=>{S.page=1;const p=e.target.dataset.f,pos=e.target.selectionStart;render();const n=document.querySelector(`[data-f="${p}"]`);n.focus();n.setSelectionRange(pos,pos)},300)});
+document.addEventListener('keydown',e=>{const tag=(e.target.tagName||'').toLowerCase();if(['input','select','textarea'].includes(tag)||$('modal').style.display==='flex')return;
+ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?redoLastAction():undoLastAction()}else if(e.key==='Delete')bulkDeleteOrders()});
+$('modal').onclick=e=>{if(e.target.id==='modal')closeM()};
+render();
+</script></body></html>
