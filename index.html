@@ -40,11 +40,11 @@ tr.del td{opacity:.45;text-decoration:line-through}tr.sel td{background:#e4edff}
 <div class="bar">
 <input type="search" id="q" placeholder="Cari di semua kolom...">
 <select id="stat"><option value="all">Semua status</option><option value="valid">Valid</option><option value="warn">Peringatan</option><option value="error">Error</option><option value="edited">Pernah diedit</option><option value="sel">Terpilih</option></select>
-<select id="view"><option value="active">Order aktif</option><option value="del">Order terhapus</option></select>
+<select id="cod"><option value="">COD &amp; non-COD</option><option value="cod">Hanya COD</option><option value="non">Hanya non-COD</option></select><select id="ctype"><option value="">RO &amp; new</option><option value="ro">Hanya RO</option><option value="new">Hanya new (bukan RO)</option></select><select id="view"><option value="active">Order aktif</option><option value="del">Order terhapus</option></select>
 <button id="bRf">Reset filter</button><span class="mut" id="cnt"></span><span style="flex:1"></span>
 <button id="bUn">↶ Undo</button><button id="bRe">↷ Redo</button><button id="bBulk">Edit Massal</button>
 <button id="bDel" class="d">Hapus Terpilih</button><button id="bDelF" class="d">Hapus Hasil Filter</button><button id="bDelA" class="d">Hapus Semua</button><button id="bRes">Pulihkan Terpilih</button>
-<button id="bLog">Riwayat</button></div>
+<button id="bHP">Salin HP (hasil filter)</button><button id="bRO">Cek Customer RO</button><button id="bLog">Riwayat</button></div>
 <div class="wrap"><table id="tbl"></table></div>
 <div class="bar" style="margin-top:8px"><button id="pP">‹</button><span id="pg"></span><button id="pN">›</button>
 <select id="per"><option>25</option><option selected>50</option><option>100</option><option>250</option></select> baris/halaman
@@ -68,7 +68,7 @@ try{const p=JSON.parse(localStorage.getItem('scalev_spx_v1')||'null');if(p){Obje
 const $=id=>document.getElementById(id);const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function save(){try{localStorage.setItem('scalev_spx_v1',JSON.stringify({orders:S.orders,cfg:S.cfg,log:S.log.slice(-2000),fname:S.fname,cols:S.cols,n:S.n,imported:S.imported}))}catch(e){toast('Penyimpanan browser penuh/tidak tersedia; data hanya ada di sesi ini.')}}
 function toast(t){const e=$('toast');e.textContent=t;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',3500)}
-function modal(h){$('mbox').innerHTML=h;$('modal').style.display='flex'}function ask(msg,yes,no){modal(`<h3>Konfirmasi</h3><p>${esc(msg)}</p><div class="row"><button id="aN">Batal</button><button class="p" id="aY">Ya, lanjutkan</button></div>`);$('aY').onclick=()=>{closeM();yes()};$('aN').onclick=()=>{closeM();no&&no()}}
+function modal(h){$('mbox').style.width='';$('mbox').innerHTML=h;$('modal').style.display='flex'}function ask(msg,yes,no){modal(`<h3>Konfirmasi</h3><p>${esc(msg)}</p><div class="row"><button id="aN">Batal</button><button class="p" id="aY">Ya, lanjutkan</button></div>`);$('aY').onclick=()=>{closeM();yes()};$('aN').onclick=()=>{closeM();no&&no()}}
 function closeM(){$('modal').style.display='none'}
 /* ================= MAPPING ================= */
 const isCod=raw=>S.cfg.codValues.split(',').map(x=>x.trim().toLowerCase()).includes(String(raw.payment_method||'').trim().toLowerCase());
@@ -86,13 +86,13 @@ function previewImport(name,r){const f=r.meta.fields||[];if(f.length<5){return m
  const used=new Set(needCols());const extra=f.filter(c=>!used.has(c));
  const have=new Set(S.orders.map(o=>o.v[0]));const seen=new Set();const dups=[];const noId=rows.filter(x=>!String(x.order_id||'').trim()).length;
  rows.forEach(x=>{const id=String(x.order_id||'').trim();if(!id)return;if(have.has(id)||seen.has(id))dups.push(id);seen.add(id)});
- S._pend={name,rows};
+ S._pend={name,rows};const ro=rows.filter(isRO).length;
  modal(`<h3>Preview Import</h3><p><b>${esc(name)}</b></p><ul><li>Baris sumber: ${r.data.length} · Order terbaca: ${rows.length}</li><li>Tanpa order_id (ditandai error, tidak dihapus): ${noId}</li><li>Duplikat: ${dups.length} ${dups.length?'<span class="mut">('+esc(dups.slice(0,8).join(', '))+(dups.length>8?'…':'')+')</span>':''}</li>
  <li style="color:${miss.length?'var(--er)':'inherit'}">Kolom dibutuhkan yang tidak ditemukan: ${miss.length?esc(miss.join(', ')):'tidak ada'}</li><li>Kolom tambahan tidak dipetakan: ${extra.length} (tetap disimpan sebagai data audit)</li></ul>
  ${S.orders.length?`<p>Sesi aktif berisi ${S.orders.length} order. <label><input type="radio" name="im" value="add" checked> Tambahkan ke sesi</label> <label><input type="radio" name="im" value="rep"> Ganti sesi</label></p>`:''}
  ${dups.length?'<p>Duplikat akan <b>dilewati</b>.</p>':''}
  <div style="overflow:auto"><table class="mt"><tr>${['order_id','name','phone','postal_code','payment_method','gross_revenue'].map(c=>'<th>'+c+'</th>').join('')}</tr>${rows.slice(0,5).map(x=>'<tr>'+['order_id','name','phone','postal_code','payment_method','gross_revenue'].map(c=>'<td>'+esc(x[c])+'</td>').join('')+'</tr>').join('')}</table></div>
- <div class="row"><button onclick="closeM()">Batalkan Import</button><button class="p" onclick="doImport()" ${rows.length?'':'disabled'}>Impor ${rows.length} order</button></div>`);S._cols=f}
+ <div class="row"><button onclick="closeM()">Batalkan Import</button>${ro?`<button onclick="reviewRO('pend')">Preview ${ro} order RO</button>`:''}<button class="p" onclick="doImport()" ${rows.length?'':'disabled'}>Impor ${rows.length} order</button></div>`);S._cols=f}
 function doImport(){const mode=(document.querySelector('input[name=im]:checked')||{}).value;if(mode==='rep')return ask('Ganti seluruh sesi aktif? Perubahan sebelumnya akan hilang.',()=>{S.orders=[];S.log=[];S.sel.clear();doImport2()});doImport2()}
 function doImport2(){const {name,rows}=S._pend;
  const have=new Set(S.orders.map(o=>o.v[0]));let add=0,skip=0;
@@ -131,6 +131,7 @@ function cellMatch(val,f){f=f.trim();if(!f)return true;const s=String(val).toLow
 function applyFilters(){const q=$('q').value.toLowerCase(),st=$('stat').value,vw=$('view').value;
  return S.orders.filter(o=>{if((vw==='del')!==o.del)return false;
   if(st==='valid'||st==='warn'||st==='error'){if(o.st!==st)return false}else if(st==='edited'){if(!Object.keys(o.ed).length)return false}else if(st==='sel'&&!S.sel.has(o.id))return false;
+  if($('cod').value&&(o.v[10]==='Paket COD')!==($('cod').value==='cod'))return false;if($('ctype').value&&isRO(o.raw)!==($('ctype').value==='ro'))return false;
   if(q&&!o.v.join('\u0001').toLowerCase().includes(q))return false;
   for(const c in S.filters)if(!cellMatch(o.v[c],S.filters[c]))return false;return true})}
 function applySorting(a){if(!S.sort.length)return a;return[...a].sort((x,y)=>{for(const{c,d}of S.sort){let p=x.v[c],q=y.v[c];const r=(typeof p==='number'&&typeof q==='number')?p-q:String(p).localeCompare(String(q),'id',{numeric:true});if(r)return r*d}return 0})}
@@ -141,6 +142,7 @@ function renderStats(){const s=calculateDashboardStats();const fm=n=>'Rp '+n.toL
  $('cards').innerHTML=[['Diimpor',s.imp],['Aktif',s.act],['Terhapus',s.del],['Valid',s.ok],['Peringatan',s.warn],['Error / bermasalah',s.err],['Terpilih',s.sel],['Order COD',s.codN],['Order non-COD',s.non],['Total nominal COD',fm(s.codSum)]].map(([a,b])=>`<div class="card"><b>${b}</b><span>${a}</span></div>`).join('');
  const st=(c,t)=>`<div class="step ${c}">${t}</div>`;const has=s.act>0;
  $('steps').innerHTML=st(has?'done':'todo','1 Import Scalev')+st(has?'done':'','2 Mapping Data')+st(has?(S.log.length?'done':'todo'):'','3 Edit dan Filter')+st(has?(s.err?'todo':'done'):'',`4 Validasi${has&&s.err?' ('+s.err+' error)':''}`)+st(S.exported?'done':has?'todo':'','5 Ekspor SPX');
+ {const n=S.orders.filter(o=>!o.del&&isRO(o.raw)).length;$('bRO').textContent='Cek Customer RO ('+n+')'}
  $('drop').style.display=has?'none':'block';$('fname').textContent=S.fname?`${S.fname} · ${s.act} order aktif`:'Belum ada file'}
 /* ================= TABEL ================= */
 function render(){analyze();renderStats();let rows=applySorting(applyFilters());const per=+$('per').value,pages=Math.max(1,Math.ceil(rows.length/per));S.page=Math.min(S.page,pages);
@@ -205,6 +207,32 @@ function openMap(){const c=S.cfg,opts=['',...S.cols];modal(`<h3>Pengaturan Mappi
 function loadRegion(f){const rd=new FileReader();rd.onload=e=>{try{const wb=XLSX.read(e.target.result,{sheets:['List Provinsi-Kota-Kecamatan'],type:'array'});const ws=wb.Sheets['List Provinsi-Kota-Kecamatan'];if(!ws)throw new Error('Sheet "List Provinsi-Kota-Kecamatan" tidak ada');
  const R=new Map();XLSX.utils.sheet_to_json(ws,{header:1,raw:true}).slice(2).forEach(r=>{if(!r[0])return;const p=N(r[0]);if(!R.has(p))R.set(p,new Map());const P=R.get(p),ck=N(r[1]);if(!P.has(ck))P.set(ck,{d:new Map()});const d=N(r[2]);if(!P.get(ck).d.has(d))P.get(ck).d.set(d,new Set());r.slice(3).forEach(z=>z&&P.get(ck).d.get(d).add(String(Math.round(z))))});
  S.region=R;render();toast('Referensi wilayah dimuat ('+R.size+' provinsi). Pemeriksaan bersifat peringatan.')}catch(x){toast('Gagal memuat referensi: '+x.message)}};rd.readAsArrayBuffer(f)}
+/* ================= REVIEW CUSTOMER RO ================= */
+const isRO=raw=>String(raw.customer_type||'').trim().toLowerCase()==='ro';
+let ROS=new Set();
+function roFlags(r){const f=[];['canceled_time','rts_time','conflict_time'].forEach(c=>String(r[c]||'').trim()&&f.push(c.replace('_time','')));
+ const st=[r.order_status,r.courier_status,r.payment_status].join(' ').toLowerCase();if(/cancel|rts|return|retur|gagal|fail|conflict/.test(st))f.push('status: '+[r.order_status,r.courier_status].filter(Boolean).join('/'));return[...new Set(f)]}
+function copyText(t,n){if(!t)return toast('Tidak ada nomor HP');
+ const fb=()=>{modal(`<h3>Salin ${n} nomor HP</h3><p class="mut">Salin otomatis diblokir browser. Teks sudah terpilih: tekan Ctrl+C.</p><textarea id="cpt" rows="12" style="width:100%"></textarea><div class="row"><button class="p" onclick="closeM()">Tutup</button></div>`);const e=$('cpt');e.value=t;e.focus();e.select();try{document.execCommand('copy')}catch(x){}};
+ if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(()=>toast(n+' nomor HP disalin (1 per baris)'),fb);else fb()}
+function roCopy(){const it=S._roItems.filter(x=>!ROS.size||ROS.has(x.k));const a=[...new Set(it.map(x=>String(x.raw.phone||'').trim()).filter(Boolean))];copyText(a.join('\n'),a.length)}
+function roTog(k,on){on?ROS.add(k):ROS.delete(k)}
+function reviewRO(mode,keep){const pend=mode==='pend';if(!keep)ROS=new Set();
+ const src=pend?S._pend.rows.map((raw,i)=>({k:String(i),raw})):S.orders.filter(o=>!o.del).map(o=>({k:o.id,raw:o.raw}));
+ const items=src.filter(x=>isRO(x.raw));S._roMode=mode;S._roItems=items;
+ const byPh={};src.forEach(x=>{const p=String(x.raw.phone||'').trim();if(p)(byPh[p]=byPh[p]||[]).push(x)});
+ const cards=items.map(x=>{const r=x.raw,fl=roFlags(r),oth=(byPh[String(r.phone||'').trim()]||[]).filter(o=>o.k!==x.k),filled=Object.keys(r).filter(c=>String(r[c]??'').trim()!=='');
+  return`<div style="border:1px solid var(--l);border-radius:8px;padding:8px;margin:8px 0"><label><input type="checkbox" onchange="roTog('${x.k}',this.checked)" ${ROS.has(x.k)?'checked':''}> <b>${esc(r.order_id)}</b> · ${esc(r.name)} · ${esc(r.phone)}</label> <span class="bd ${fl.length?'error':'valid'}">${fl.length?'Ada tanda buruk':'Tidak ada tanda buruk'}</span>
+  <div class="mut">Order: ${esc(r.order_status)} · Bayar: ${esc(r.payment_status)} · Kurir: ${esc(r.courier_status||'-')} · Metode: ${esc(r.payment_method)} · Total: Rp ${(+r.gross_revenue||0).toLocaleString('id-ID')} · Handler: ${esc(r.handler||'-')} · Catatan: ${esc(r.notes||'-')}</div>
+  ${fl.length?'<div style="color:var(--er)">Tanda: '+esc(fl.join(', '))+'</div>':''}
+  <div class="mut">Order lain dengan telepon sama di ${pend?'file ini':'sesi'}: ${oth.length?oth.map(o=>esc(o.raw.order_id)+' ('+esc(o.raw.order_status)+')').join(', '):'tidak ada'}</div>
+  <details><summary>Lihat seluruh data Scalev (${filled.length} kolom terisi)</summary><table class="mt">${filled.map(c=>`<tr><th style="width:200px">${esc(c)}</th><td style="max-width:none;white-space:normal">${esc(r[c])}</td></tr>`).join('')}</table></details></div>`}).join('');
+ modal(`<h3>Preview Customer RO (${items.length})</h3><p class="mut">Menampilkan order dengan customer_type = ro. Riwayat hanya berdasarkan data yang ada di ${pend?'file ini':'sesi ini'} (file Scalev tidak memuat riwayat lengkap pelanggan). Centang order yang ingin ${pend?'dikeluarkan dari import':'dihapus'}.</p>${cards||'<p>Tidak ada order RO.</p>'}
+ <div class="row"><button onclick="${pend?"previewImport(S._pend.name,{data:S._pend.rows,meta:{fields:S._cols}})":'closeM()'}">${pend?'Kembali ke preview import':'Tutup'}</button><button onclick="ROS=new Set(S._roItems.filter(x=>roFlags(x.raw).length).map(x=>x.k));reviewRO('${mode}',1)">Pilih yang ada tanda buruk</button><button onclick="roCopy()">Salin HP RO (terpilih / semua)</button><button class="d" onclick="roDelete()">${pend?'Keluarkan dari import':'Hapus terpilih'}</button></div>`);
+ $('mbox').style.width='1000px'}
+function roDelete(){const n=ROS.size;if(!n)return toast('Centang order dulu');
+ if(S._roMode==='pend'){S._pend.rows=S._pend.rows.filter((_,i)=>!ROS.has(String(i)));toast(n+' order RO dikeluarkan dari import');return previewImport(S._pend.name,{data:S._pend.rows,meta:{fields:S._cols}})}
+ ask(`Hapus ${n} order RO terpilih dari sesi? (bisa dipulihkan lewat Undo / Order terhapus)`,()=>{pushU();S.orders.forEach(o=>ROS.has(o.id)&&(o.del=true));ROS=new Set();render();toast(n+' order RO dihapus');reviewRO('sess')})}
 /* ================= EVENT ================= */
 $('bImp').onclick=()=>$('fCsv').click();$('fCsv').onchange=e=>{if(e.target.files[0])parseScalevCSV(e.target.files[0]);e.target.value=''};
 $('bReg').onclick=()=>$('fReg').click();$('fReg').onchange=e=>{if(e.target.files[0])loadRegion(e.target.files[0]);e.target.value=''};
@@ -214,8 +242,10 @@ $('bRst').onclick=()=>ask('Reset seluruh sesi? Semua order, edit, dan riwayat di
 $('bUn').onclick=undoLastAction;$('bRe').onclick=redoLastAction;$('bDel').onclick=bulkDeleteOrders;
 $('bDelF').onclick=()=>delIds(S.shown.filter(o=>!o.del).map(o=>o.id),'Hapus hasil filter');$('bDelA').onclick=()=>{delIds(S.orders.filter(o=>!o.del).map(o=>o.id),'HAPUS SEMUA')};
 $('bRes').onclick=()=>{const ids=[...S.sel].filter(i=>S.orders.find(o=>o.id===i&&o.del));if(!ids.length)return toast('Pilih order di tampilan "Order terhapus"');pushU();S.orders.forEach(o=>ids.includes(o.id)&&(o.del=false));ids.forEach(i=>S.sel.delete(i));render()};
-$('bRf').onclick=()=>{S.filters={};$('q').value='';$('stat').value='all';S.page=1;render()};
-['q','stat','view','per'].forEach(i=>$(i).oninput=()=>{S.page=1;render()});$('pP').onclick=()=>{S.page=Math.max(1,S.page-1);render()};$('pN').onclick=()=>{S.page++;render()};
+$('bRf').onclick=()=>{S.filters={};$('cod').value='';$('ctype').value='';$('q').value='';$('stat').value='all';S.page=1;render()};
+['q','stat','view','per','cod','ctype'].forEach(i=>$(i).oninput=()=>{S.page=1;render()});$('pP').onclick=()=>{S.page=Math.max(1,S.page-1);render()};$('pN').onclick=()=>{S.page++;render()};
+$('bHP').onclick=()=>{const a=[...new Set(S.shown.filter(o=>!o.del).map(o=>String(o.v[2]).trim()).filter(Boolean))];copyText(a.join('\n'),a.length)};
+$('bRO').onclick=()=>reviewRO('sess');
 $('bLog').onclick=()=>modal(`<h3>Riwayat Perubahan (${S.log.length})</h3><div style="overflow:auto;max-height:55vh"><table class="mt"><tr><th>Waktu</th><th>Order</th><th>Kolom</th><th>Lama</th><th>Baru</th></tr>${S.log.slice(-200).reverse().map(l=>`<tr><td>${l.t.slice(0,19).replace('T',' ')}</td><td>${esc(l.order)}</td><td>${esc(l.col.split(' // ')[0])}</td><td>${esc(l.old)}</td><td>${esc(l.new)}</td></tr>`).join('')}</table></div><div class="row"><button onclick="exportLog()">Ekspor CSV</button><button class="p" onclick="closeM()">Tutup</button></div>`);
 $('bBulk').onclick=()=>{const ids=[...S.sel].filter(i=>S.orders.find(o=>o.id===i&&!o.del));if(!ids.length)return toast('Pilih order dulu');
  modal(`<h3>Edit Massal (${ids.length} order)</h3><p>Kolom: <select id="bc">${H.map((h,i)=>[0].includes(i)?'':`<option value="${i}">${esc(SH[i])}</option>`).join('')}</select> Nilai baru: <input id="bv"></p><div class="row"><button onclick="closeM()">Batal</button><button class="p" id="bgo">Terapkan</button></div>`);
