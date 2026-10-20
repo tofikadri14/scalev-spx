@@ -29,10 +29,11 @@ tr.del td{opacity:.45;text-decoration:line-through}tr.sel td{background:#e4edff}
 #toast{position:fixed;bottom:14px;right:14px;background:var(--n);color:#fff;padding:8px 14px;border-radius:8px;display:none;z-index:10}
 #drop{border:2px dashed var(--b);border-radius:10px;padding:26px;text-align:center;background:#fff;margin-bottom:10px;color:var(--m)}
 .mt td,.mt th{max-width:200px;position:static}
+#rawp{position:fixed;inset:0;background:#fff;display:none;flex-direction:column;z-index:8}#rawp .bar{padding:8px 12px;margin:0;border-bottom:1px solid var(--l);background:var(--bg)}#rawt{flex:1;overflow:auto}#rawt tr.mk td{background:#fff3b0}#rawt td.n{cursor:pointer;background:#eef2fa;user-select:none}
 </style></head><body>
 <header><h1>Scalev to SPX</h1><span id="fname">Belum ada file</span>
 <button class="p" id="bImp">Import CSV Scalev</button><button class="p" id="bExp">Ekspor Excel SPX</button>
-<button id="bMap">Pengaturan Mapping</button><button id="bReg">Muat Referensi Wilayah</button><button id="bRst" class="d">Reset Sesi</button>
+<button id="bRaw">← CSV Scalev (tahap 1)</button><button id="bMap">Pengaturan Mapping</button><button id="bReg">Muat Referensi Wilayah</button><button id="bRst" class="d">Reset Sesi</button>
 <input type="file" id="fCsv" accept=".csv,text/csv" hidden><input type="file" id="fReg" accept=".xlsx" hidden></header>
 <main>
 <div class="steps" id="steps"></div><div class="cards" id="cards"></div>
@@ -50,7 +51,7 @@ tr.del td{opacity:.45;text-decoration:line-through}tr.sel td{background:#e4edff}
 <select id="per"><option>25</option><option selected>50</option><option>100</option><option>250</option></select> baris/halaman
 <span class="mut">Filter kolom: teks = mengandung · <code>=x</code> sama · <code>!x</code> tidak sama · <code>^x</code> diawali · <code>x$</code> diakhiri · <code>-</code> kosong · <code>*</code> terisi · <code>&gt;n</code> <code>&lt;n</code> <code>a..b</code> angka · Shift+klik header = urut berlapis</span></div>
 </main>
-<div id="modal"><div class="box" id="mbox"></div></div><div id="toast"></div>
+<div id="rawp"><div class="bar"><b>Tahap 1: CSV Scalev (data utuh)</b><span class="mut" id="rinfo"></span><input type="search" id="rq" placeholder="Cari di semua kolom..."><select id="rview"><option value="act">Order aktif</option><option value="del">Terhapus</option><option value="all">Semua</option></select><select id="rro"><option value="">RO &amp; new</option><option value="ro">Hanya RO</option><option value="new">Hanya new</option></select><select id="rcod"><option value="">COD &amp; non-COD</option><option value="cod">Hanya COD</option><option value="non">Hanya non-COD</option></select><label><input type="checkbox" id="ronly"> hanya ditandai</label><button id="rDel" class="d">Hapus ditandai</button><button id="rRes">Pulihkan ditandai</button><button id="rRO">Cek RO</button><button id="rMkA">Tandai semua hasil</button><button id="rMkC">Hapus tanda</button><button class="p" id="rCpH">Salin ditandai + header</button><button id="rCp">Salin ditandai</button><button id="rCpF">Salin semua hasil</button><button id="rX">Unduh XLSX</button><button id="rC">Unduh CSV</button><a href="https://sheets.new" target="_blank" rel="noopener"><button>Buka Google Sheets</button></a><button id="rPP">‹</button><span id="rpg"></span><button id="rPN">›</button><button class="p" id="rClose">Lanjut ke Excel SPX →</button></div><div id="rawt"></div></div><div id="modal"><div class="box" id="mbox"></div></div><div id="toast"></div>
 <script>
 /* ================= KONSTANTA ================= */
 const SHEET='Template Pembuatan Order Massal';
@@ -98,7 +99,7 @@ function doImport2(){const {name,rows}=S._pend;
  const have=new Set(S.orders.map(o=>o.v[0]));let add=0,skip=0;
  rows.forEach(raw=>{const id=String(raw.order_id||'').trim();if(id&&have.has(id)){skip++;return}if(id)have.add(id);
   S.orders.push({id:'r'+(++S.n),raw,v:mapScalevToSPX(raw),ed:{},del:false});add++});
- S.fname=name;S.cols=S._cols;S.undo=[];S.redo=[];S.exported=false;S.imported+=add;closeM();save();render();toast(`${add} order diimpor, ${skip} duplikat dilewati`)}
+ S.fname=name;S.cols=S._cols;S.undo=[];S.redo=[];S.exported=false;S.imported+=add;closeM();save();render();toast(`${add} order diimpor, ${skip} duplikat dilewati`);openRaw()}
 /* ================= VALIDASI ================= */
 const N=s=>String(s||'').toUpperCase().replace(/KABUPATEN|KAB\.?|KOTA ADM\.?|KOTA|[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
 function validateRegion(v){const R=S.region;if(!R)return[];const o=[];const p=R.get(N(v[4]));if(!p)return[{l:'warn',c:4,m:'Provinsi tidak ada di referensi wilayah'}];
@@ -141,12 +142,12 @@ function calculateDashboardStats(){const a=S.orders.filter(o=>!o.del);const cod=
 function renderStats(){const s=calculateDashboardStats();const fm=n=>'Rp '+n.toLocaleString('id-ID');
  $('cards').innerHTML=[['Diimpor',s.imp],['Aktif',s.act],['Terhapus',s.del],['Valid',s.ok],['Peringatan',s.warn],['Error / bermasalah',s.err],['Terpilih',s.sel],['Order COD',s.codN],['Order non-COD',s.non],['Total nominal COD',fm(s.codSum)]].map(([a,b])=>`<div class="card"><b>${b}</b><span>${a}</span></div>`).join('');
  const st=(c,t)=>`<div class="step ${c}">${t}</div>`;const has=s.act>0;
- $('steps').innerHTML=st(has?'done':'todo','1 Import Scalev')+st(has?'done':'','2 Mapping Data')+st(has?(S.log.length?'done':'todo'):'','3 Edit dan Filter')+st(has?(s.err?'todo':'done'):'',`4 Validasi${has&&s.err?' ('+s.err+' error)':''}`)+st(S.exported?'done':has?'todo':'','5 Ekspor SPX');
+ $('steps').innerHTML=st(has?'done':'todo','1 Import Scalev')+st(has?'done':'','2 CSV Scalev (cek &amp; filter)')+st(has?(S.log.length?'done':'todo'):'','3 Excel SPX (edit)')+st(has?(s.err?'todo':'done'):'',`4 Validasi${has&&s.err?' ('+s.err+' error)':''}`)+st(S.exported?'done':has?'todo':'','5 Ekspor SPX');
  {const n=S.orders.filter(o=>!o.del&&isRO(o.raw)).length;$('bRO').textContent='Cek Customer RO ('+n+')'}
  $('drop').style.display=has?'none':'block';$('fname').textContent=S.fname?`${S.fname} · ${s.act} order aktif`:'Belum ada file'}
 /* ================= TABEL ================= */
 function render(){analyze();renderStats();let rows=applySorting(applyFilters());const per=+$('per').value,pages=Math.max(1,Math.ceil(rows.length/per));S.page=Math.min(S.page,pages);
- const pr=rows.slice((S.page-1)*per,S.page*per);S.shown=rows;$('cnt').textContent=rows.length+' hasil';$('pg').textContent=`Hal ${S.page}/${pages}`;
+ const pr=rows.slice((S.page-1)*per,S.page*per);S.shown=rows;$('cnt').textContent=rows.length+' hasil';if($('rawp').style.display==='flex')renderRaw();$('pg').textContent=`Hal ${S.page}/${pages}`;
  const ar=c=>{const i=S.sort.findIndex(x=>x.c===c);return i<0?'':(S.sort[i].d>0?' ▲':' ▼')};
  let h='<thead><tr><th style="width:34px"><input type="checkbox" id="all" title="Pilih semua hasil filter"></th><th style="width:44px">#</th><th style="width:90px">Status</th>'+SH.map((x,i)=>`<th data-s="${i}" style="width:${[0,3,16,20,21].includes(i)?150:i===19?110:110}px" title="${esc(H[i])}">${x}${ar(i)}</th>`).join('')+'<th style="width:70px">Aksi</th></tr>';
  h+='<tr class="f"><th></th><th></th><th></th>'+SH.map((_,i)=>`<th><input data-f="${i}" value="${esc(S.filters[i]||'')}"></th>`).join('')+'<th></th></tr></thead><tbody>';
@@ -212,9 +213,9 @@ const isRO=raw=>String(raw.customer_type||'').trim().toLowerCase()==='ro';
 let ROS=new Set();
 function roFlags(r){const f=[];['canceled_time','rts_time','conflict_time'].forEach(c=>String(r[c]||'').trim()&&f.push(c.replace('_time','')));
  const st=[r.order_status,r.courier_status,r.payment_status].join(' ').toLowerCase();if(/cancel|rts|return|retur|gagal|fail|conflict/.test(st))f.push('status: '+[r.order_status,r.courier_status].filter(Boolean).join('/'));return[...new Set(f)]}
-function copyText(t,n){if(!t)return toast('Tidak ada nomor HP');
- const fb=()=>{modal(`<h3>Salin ${n} nomor HP</h3><p class="mut">Salin otomatis diblokir browser. Teks sudah terpilih: tekan Ctrl+C.</p><textarea id="cpt" rows="12" style="width:100%"></textarea><div class="row"><button class="p" onclick="closeM()">Tutup</button></div>`);const e=$('cpt');e.value=t;e.focus();e.select();try{document.execCommand('copy')}catch(x){}};
- if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(()=>toast(n+' nomor HP disalin (1 per baris)'),fb);else fb()}
+function copyText(t,n,label){if(!t)return toast('Tidak ada data');label=label||'nomor HP';
+ const fb=()=>{modal(`<h3>Salin ${n} ${esc(label)}</h3><p class="mut">Salin otomatis diblokir browser. Teks sudah terpilih: tekan Ctrl+C.</p><textarea id="cpt" rows="12" style="width:100%"></textarea><div class="row"><button class="p" onclick="closeM()">Tutup</button></div>`);const e=$('cpt');e.value=t;e.focus();e.select();try{document.execCommand('copy')}catch(x){}};
+ if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(()=>toast(n+' '+label+' disalin'),fb);else fb()}
 function roCopy(){const it=S._roItems.filter(x=>!ROS.size||ROS.has(x.k));const a=[...new Set(it.map(x=>String(x.raw.phone||'').trim()).filter(Boolean))];copyText(a.join('\n'),a.length)}
 function roTog(k,on){on?ROS.add(k):ROS.delete(k)}
 function reviewRO(mode,keep){const pend=mode==='pend';if(!keep)ROS=new Set();
@@ -233,6 +234,25 @@ function reviewRO(mode,keep){const pend=mode==='pend';if(!keep)ROS=new Set();
 function roDelete(){const n=ROS.size;if(!n)return toast('Centang order dulu');
  if(S._roMode==='pend'){S._pend.rows=S._pend.rows.filter((_,i)=>!ROS.has(String(i)));toast(n+' order RO dikeluarkan dari import');return previewImport(S._pend.name,{data:S._pend.rows,meta:{fields:S._cols}})}
  ask(`Hapus ${n} order RO terpilih dari sesi? (bisa dipulihkan lewat Undo / Order terhapus)`,()=>{pushU();S.orders.forEach(o=>ROS.has(o.id)&&(o.del=true));ROS=new Set();render();toast(n+' order RO dihapus');reviewRO('sess')})}
+/* ================= TAMPILAN CSV UTUH ================= */
+const RW={filters:{},sort:[],q:'',page:1,per:100,marks:new Set(),last:null,rows:[]};
+const rawCols=()=>S.cols&&S.cols.length?S.cols:(S.orders[0]?Object.keys(S.orders[0].raw):[]);
+function rawFilter(){const q=$('rq').value.toLowerCase(),only=$('ronly').checked,rt=$('rro').value,rc=$('rcod').value,vw=$('rview').value;
+ let a=S.orders.filter(o=>{if((vw==='act'&&o.del)||(vw==='del'&&!o.del))return false;if(only&&!RW.marks.has(o.id))return false;if(rt&&isRO(o.raw)!==(rt==='ro'))return false;if(rc&&isCod(o.raw)!==(rc==='cod'))return false;
+  for(const c in RW.filters)if(!cellMatch(o.raw[c]??'',RW.filters[c]))return false;return!q||Object.values(o.raw).join('\u0001').toLowerCase().includes(q)});
+ if(RW.sort.length)a=[...a].sort((x,y)=>{for(const{c,d}of RW.sort){const p=x.raw[c]??'',z=y.raw[c]??'';const r=(p!==''&&z!==''&&!isNaN(p)&&!isNaN(z))?p-z:String(p).localeCompare(String(z),'id',{numeric:true});if(r)return r*d}return 0});return a}
+function renderRaw(){const cols=rawCols(),rows=RW.rows=rawFilter(),pages=Math.max(1,Math.ceil(rows.length/RW.per));RW.page=Math.min(RW.page,pages);
+ const pr=rows.slice((RW.page-1)*RW.per,RW.page*RW.per);$('rpg').textContent=`Hal ${RW.page}/${pages}`;$('rinfo').textContent=` ${rows.length} baris · ${cols.length} kolom · ${[...RW.marks].filter(i=>S.orders.some(o=>o.id===i)).length} ditandai `;
+ $('rawt').innerHTML='<table><thead><tr><th style="width:56px">#</th>'+cols.map(c=>{const i=RW.sort.findIndex(x=>x.c===c);return`<th data-col="${esc(c)}" title="Klik: urutkan · Shift+klik: urut berlapis">${esc(c)}${i<0?'':RW.sort[i].d>0?' ▲':' ▼'} <span class="cc" title="Salin kolom (ditandai / hasil)">⧉</span></th>`}).join('')+'</tr><tr class="f"><th></th>'+cols.map(c=>`<th><input data-rf="${esc(c)}" value="${esc(RW.filters[c]||'')}"></th>`).join('')+'</tr></thead><tbody>'+pr.map((o,k)=>`<tr data-id="${o.id}" data-i="${(RW.page-1)*RW.per+k}" class="${RW.marks.has(o.id)?'mk':''} ${o.del?'del':''}"><td class="n" title="Klik: tandai · Shift+klik: rentang">${(RW.page-1)*RW.per+k+1}</td>`+cols.map(c=>`<td title="${esc(o.raw[c])}">${esc(o.raw[c])}</td>`).join('')+'</tr>').join('')+'</tbody></table>'}
+const tsvq=v=>{v=String(v??'');return /[\t\n\r"]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+function rawText(list,header){const c=rawCols();return(header?[c.map(tsvq).join('\t')]:[]).concat(list.map(o=>c.map(k=>tsvq(o.raw[k])).join('\t'))).join('\n')}
+const marked=()=>S.orders.filter(o=>RW.marks.has(o.id));
+function rawCopy(list,header,label){if(!list.length)return toast('Belum ada baris');copyText(rawText(list,header),list.length,label+' (tempel ke Excel/Sheets)')}
+function rawDownload(kind){const list=marked().length?marked():RW.rows,c=rawCols();if(!list.length)return toast('Tidak ada baris');
+ const aoa=[c,...list.map(o=>c.map(k=>String(o.raw[k]??'')))];
+ if(kind==='csv')return dl(new Blob(['\uFEFF'+aoa.map(r=>r.map(csvq).join(';')).join('\n')],{type:'text/csv'}),'scalev-raw.csv');
+ try{const ws=XLSX.utils.aoa_to_sheet(aoa),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Scalev');XLSX.writeFile(wb,'scalev-raw.xlsx');toast(list.length+' baris diunduh ('+(marked().length?'ditandai':'hasil tampilan')+')')}catch(e){toast('Gagal XLSX: '+e.message)}}
+function openRaw(){RW.page=1;if(!S.orders.length)return toast('Belum ada data. Import CSV dulu.');$('rawp').style.display='flex';renderRaw()}
 /* ================= EVENT ================= */
 $('bImp').onclick=()=>$('fCsv').click();$('fCsv').onchange=e=>{if(e.target.files[0])parseScalevCSV(e.target.files[0]);e.target.value=''};
 $('bReg').onclick=()=>$('fReg').click();$('fReg').onchange=e=>{if(e.target.files[0])loadRegion(e.target.files[0]);e.target.value=''};
@@ -245,6 +265,20 @@ $('bRes').onclick=()=>{const ids=[...S.sel].filter(i=>S.orders.find(o=>o.id===i&
 $('bRf').onclick=()=>{S.filters={};$('cod').value='';$('ctype').value='';$('q').value='';$('stat').value='all';S.page=1;render()};
 ['q','stat','view','per','cod','ctype'].forEach(i=>$(i).oninput=()=>{S.page=1;render()});$('pP').onclick=()=>{S.page=Math.max(1,S.page-1);render()};$('pN').onclick=()=>{S.page++;render()};
 $('bHP').onclick=()=>{const a=[...new Set(S.shown.filter(o=>!o.del).map(o=>String(o.v[2]).trim()).filter(Boolean))];copyText(a.join('\n'),a.length)};
+['rview','rro','rcod'].forEach(i=>$(i).oninput=()=>{RW.page=1;renderRaw()});
+$('rawt').addEventListener('input',e=>{const f=e.target.dataset.rf;if(f===undefined)return;RW.filters[f]=e.target.value;if(!e.target.value)delete RW.filters[f];clearTimeout(RW.ft);RW.ft=setTimeout(()=>{RW.page=1;const pos=e.target.selectionStart;renderRaw();const n=[...document.querySelectorAll('[data-rf]')].find(x=>x.dataset.rf===f);if(n){n.focus();n.setSelectionRange(pos,pos)}},300)});
+$('rRO').onclick=()=>reviewRO('sess');
+$('rDel').onclick=()=>{const ids=marked().filter(o=>!o.del).map(o=>o.id);if(!ids.length)return toast('Tandai baris dulu (klik nomor baris)');ask(`Hapus ${ids.length} order ditandai? Order ini tidak akan muncul di Excel SPX (bisa dipulihkan / Undo).`,()=>{pushU();const set=new Set(ids);S.orders.forEach(o=>set.has(o.id)&&(o.del=true));ids.forEach(i=>RW.marks.delete(i));render();toast(ids.length+' order dihapus')})};
+$('rRes').onclick=()=>{const l=marked().filter(o=>o.del);if(!l.length)return toast('Tandai order terhapus dulu (pilih tampilan Terhapus)');pushU();l.forEach(o=>{o.del=false;RW.marks.delete(o.id)});render()};
+$('bRaw').onclick=openRaw;$('rClose').onclick=()=>{$('rawp').style.display='none';render()};
+['rq','ronly'].forEach(i=>$(i).oninput=()=>{RW.page=1;renderRaw()});$('rPP').onclick=()=>{RW.page=Math.max(1,RW.page-1);renderRaw()};$('rPN').onclick=()=>{RW.page++;renderRaw()};
+$('rMkA').onclick=()=>{RW.rows.forEach(o=>RW.marks.add(o.id));renderRaw()};$('rMkC').onclick=()=>{RW.marks.clear();renderRaw()};
+$('rCpH').onclick=()=>rawCopy(marked(),true,'baris');$('rCp').onclick=()=>rawCopy(marked(),false,'baris');$('rCpF').onclick=()=>rawCopy(RW.rows,true,'baris');
+$('rX').onclick=()=>rawDownload('xlsx');$('rC').onclick=()=>rawDownload('csv');
+$('rawt').addEventListener('click',e=>{const th=e.target.closest('th[data-col]');if(th&&e.target.classList.contains('cc')){const c=th.dataset.col,l=marked().length?marked():RW.rows;return copyText(l.map(o=>String(o.raw[c]??'')).join('\n'),l.length,'nilai kolom '+c)}
+ if(th){const c=th.dataset.col,i=RW.sort.findIndex(x=>x.c===c);if(!e.shiftKey)RW.sort=RW.sort.filter(x=>x.c===c);const x=RW.sort.find(y=>y.c===c);if(!x)RW.sort.push({c,d:1});else if(x.d===1)x.d=-1;else RW.sort=RW.sort.filter(y=>y.c!==c);return renderRaw()}
+ const td=e.target.closest('td.n');if(!td)return;const tr=td.parentNode,i=+tr.dataset.i,id=tr.dataset.id;
+ if(e.shiftKey&&RW.last!=null){const [a,b]=[Math.min(RW.last,i),Math.max(RW.last,i)];RW.rows.slice(a,b+1).forEach(o=>RW.marks.add(o.id))}else{RW.marks.has(id)?RW.marks.delete(id):RW.marks.add(id);RW.last=i}renderRaw()});
 $('bRO').onclick=()=>reviewRO('sess');
 $('bLog').onclick=()=>modal(`<h3>Riwayat Perubahan (${S.log.length})</h3><div style="overflow:auto;max-height:55vh"><table class="mt"><tr><th>Waktu</th><th>Order</th><th>Kolom</th><th>Lama</th><th>Baru</th></tr>${S.log.slice(-200).reverse().map(l=>`<tr><td>${l.t.slice(0,19).replace('T',' ')}</td><td>${esc(l.order)}</td><td>${esc(l.col.split(' // ')[0])}</td><td>${esc(l.old)}</td><td>${esc(l.new)}</td></tr>`).join('')}</table></div><div class="row"><button onclick="exportLog()">Ekspor CSV</button><button class="p" onclick="closeM()">Tutup</button></div>`);
 $('bBulk').onclick=()=>{const ids=[...S.sel].filter(i=>S.orders.find(o=>o.id===i&&!o.del));if(!ids.length)return toast('Pilih order dulu');
