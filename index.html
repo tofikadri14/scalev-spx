@@ -243,13 +243,14 @@ const rawCols=()=>S.cols&&S.cols.length?S.cols:(S.orders[0]?Object.keys(S.orders
 function rawFilter(){const q=$('rq').value.toLowerCase(),only=$('ronly').checked,rt=$('rro').value,rc=$('rcod').value,vw=$('rview').value;
  let a=S.orders.filter(o=>{if((vw==='act'&&o.del)||(vw==='del'&&!o.del))return false;if(only&&!RW.marks.has(o.id))return false;if($('rexp').value&&!!o.exp!==($('rexp').value==='y'))return false;if(rt&&isRO(o.raw)!==(rt==='ro'))return false;if(rc&&isCod(o.raw)!==(rc==='cod'))return false;
   for(const c in RW.filters)if(!cellMatch(o.raw[c]??'',RW.filters[c]))return false;return!q||Object.values(o.raw).join('\u0001').toLowerCase().includes(q)});
- if(RW.sort.length)a=[...a].sort((x,y)=>{for(const{c,d}of RW.sort){const p=x.raw[c]??'',z=y.raw[c]??'';const r=(p!==''&&z!==''&&!isNaN(p)&&!isNaN(z))?p-z:String(p).localeCompare(String(z),'id',{numeric:true});if(r)return r*d}return 0});return a}
+ return rawSort(a)}
+function rawSort(a){if(!RW.sort.length)return a;return[...a].sort((x,y)=>{for(const{c,d}of RW.sort){const p=x.raw[c]??'',z=y.raw[c]??'';const r=(p!==''&&z!==''&&!isNaN(p)&&!isNaN(z))?p-z:String(p).localeCompare(String(z),'id',{numeric:true});if(r)return r*d}return 0})}
 function renderRaw(){const cols=rawCols(),rows=RW.rows=rawFilter(),pages=Math.max(1,Math.ceil(rows.length/RW.per));RW.page=Math.min(RW.page,pages);
  const pr=rows.slice((RW.page-1)*RW.per,RW.page*RW.per);$('rpg').textContent=`Hal ${RW.page}/${pages}`;$('rinfo').textContent=` ${rows.length} baris · ${cols.length} kolom · ${[...RW.marks].filter(i=>S.orders.some(o=>o.id===i)).length} ditandai `;
  $('rawt').innerHTML='<table><thead><tr><th style="width:70px">#</th>'+cols.map(c=>{const i=RW.sort.findIndex(x=>x.c===c);return`<th data-col="${esc(c)}" title="Klik: urutkan · Shift+klik: urut berlapis">${esc(c)}${i<0?'':RW.sort[i].d>0?' ▲':' ▼'} <span class="cc" title="Salin kolom (ditandai / hasil)">⧉</span></th>`}).join('')+'</tr><tr class="f"><th></th>'+cols.map(c=>`<th><input data-rf="${esc(c)}" value="${esc(RW.filters[c]||'')}"></th>`).join('')+'</tr></thead><tbody>'+pr.map((o,k)=>`<tr data-id="${o.id}" data-i="${(RW.page-1)*RW.per+k}" class="${RW.marks.has(o.id)?'mk':''} ${o.del?'del':''}"><td class="n" title="${o.exp?'Sudah diekspor '+o.exp+' · ':''}Klik: tandai · Shift+klik: rentang">${(RW.page-1)*RW.per+k+1}${o.exp?' <span style="color:var(--ok)">✔</span>':''}</td>`+cols.map(c=>`<td title="${esc(o.raw[c])}">${esc(o.raw[c])}</td>`).join('')+'</tr>').join('')+'</tbody></table>'}
 const tsvq=v=>{v=String(v??'');return /[\t\n\r"]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
 function rawText(list,header){const c=rawCols();return(header?[c.map(tsvq).join('\t')]:[]).concat(list.map(o=>c.map(k=>tsvq(o.raw[k])).join('\t'))).join('\n')}
-const marked=()=>S.orders.filter(o=>RW.marks.has(o.id));
+const marked=()=>rawSort(S.orders.filter(o=>RW.marks.has(o.id)));
 function rawCopy(list,header,label){if(!list.length)return toast('Belum ada baris');copyText(rawText(list,header),list.length,label+' (tempel ke Excel/Sheets)')}
 function rawDownload(kind){const list=marked().length?marked():RW.rows,c=rawCols();if(!list.length)return toast('Tidak ada baris');
  const aoa=[c,...list.map(o=>c.map(k=>String(o.raw[k]??'')))];
