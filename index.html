@@ -293,9 +293,9 @@ function openCols(k){k=k||'vis';const all=rawCols(),v=new Set(k==='vis6'?vis6():
  const each=f=>document.querySelectorAll('.cv').forEach(f);$('cvA').onclick=()=>each(c=>c.checked=true);$('cvD').onclick=()=>each(c=>c.checked=(k==='vis6'?DEFVIS6:DEFVIS).includes(c.dataset.c));$('cvE').onclick=()=>each(c=>c.checked=S.orders.some(o=>String(o.raw[c.dataset.c]||'').trim()!==''));
  $('cvS').onclick=()=>{S[k]=[...document.querySelectorAll('.cv')].filter(c=>c.checked).map(c=>c.dataset.c);closeM();save();k==='vis6'?renderFinal():renderRaw()}}
 const tsvq=v=>{v=String(v??'');return /[\t\n\r"]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
-function rawText(list,header){const c=visCols();return(header?[c.map(tsvq).join('\t')]:[]).concat(list.map(o=>c.map(k=>tsvq(o.raw[k])).join('\t'))).join('\n')}
+function rawText(list,header){const c=rawCols();return(header?[c.map(tsvq).join('\t')]:[]).concat(list.map(o=>c.map(k=>tsvq(o.raw[k])).join('\t'))).join('\n')}
 const marked=()=>rawSort(S.orders.filter(o=>RW.marks.has(o.id)));
-function rawCopy(list,header,label){if(!list.length)return toast('Belum ada baris');copyText(rawText(list,header),list.length,label+' (tempel ke Excel/Sheets)')}
+function rawCopy(list,header,label){if(!list.length)return toast('Belum ada baris');copyText(rawText(list,header),list.length,label+' · semua kolom, susunan default Scalev, tanpa header')}
 function rawDownload(kind){const list=marked().length?marked():RW.rows,c=visCols();if(!list.length)return toast('Tidak ada baris');
  const aoa=[c,...list.map(o=>c.map(k=>String(o.raw[k]??'')))];
  if(kind==='csv')return dl(new Blob(['\uFEFF'+aoa.map(r=>r.map(csvq).join(';')).join('\n')],{type:'text/csv'}),'scalev-raw.csv');
