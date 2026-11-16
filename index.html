@@ -313,8 +313,10 @@ const colIdx=L=>String(L).toUpperCase().replace(/[^A-Z]/g,'').split('').reduce((
 const pn=x=>{x=String(x||'').replace(/\D/g,'');return x.startsWith('62')?x.slice(2):x.replace(/^0+/,'')};
 const nn=x=>String(x||'').toLowerCase().replace(/[^a-z0-9]/g,'');
 let RS={rows:[],map:{},edit:{},fname:''};
-function loadSpxResult(f){const rd=new FileReader();rd.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:'array'}),js=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:'',raw:false});
- if(!js.length||!('Tracking No.' in js[0]))throw new Error('Kolom "Tracking No." tidak ditemukan. Pastikan ini file hasil SPX.');
+function loadSpxResult(f){const rd=new FileReader();rd.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:'array'});let js=null;
+ for(const sn of wb.SheetNames){const aoa=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:'',raw:false}),hi=aoa.findIndex(r=>r.some(c=>String(c).trim()==='Tracking No.'));if(hi<0)continue;
+  const Hd=aoa[hi].map(x=>String(x).trim());js=aoa.slice(hi+1).filter(r=>r.some(c=>String(c).trim()!=='')).map(r=>{const o={};Hd.forEach((h,i)=>{if(h)o[h]=r[i]??''});return o});break}
+ if(!js)throw new Error('Kolom "Tracking No." tidak ditemukan. Pastikan ini file hasil SPX.');
  RS.rows=js.map(r=>({tn:String(r['Tracking No.']).trim(),ph:pn(r['Recipient Phone Number']),nm:nn(r['Recipient Name']),cod:Math.round(+r['COD Amount']||0),ref:String(r['Customer Reference No.']||'').trim(),st:r['Tracking Status']||''})).filter(r=>r.tn);
  RS.fname=f.name;RS.edit={};matchResi();renderResi();toast(RS.rows.length+' resi dibaca')}catch(x){modal('<h3>Gagal membaca file SPX</h3><p>'+esc(x.message)+'</p><div class="row"><button class="p" onclick="closeM()">Tutup</button></div>')}};rd.readAsArrayBuffer(f)}
 function matchResi(){const used=new Set();RS.map={};const act=S.orders.filter(o=>!o.del);
